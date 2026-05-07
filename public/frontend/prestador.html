@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMoove — Prestador</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+    <h1>🚛 IMoove</h1>
+    <div>
+        <span id="nome-usuario" style="margin-right:16px;"></span>
+        <button onclick="logout()">Sair</button>
+    </div>
+</header>
+
+<div class="container">
+    <div id="alert-prestador"></div>
+
+    <div class="tabs">
+        <button class="tab active" onclick="mostrarTab('oportunidades')">Oportunidades</button>
+        <button class="tab" onclick="mostrarTab('minhas')">Minhas Propostas</button>
+    </div>
+
+    <!-- Oportunidades -->
+    <div id="tab-oportunidades" class="card">
+        <h2>Solicitações Disponíveis</h2>
+        <div id="lista-oportunidades">Carregando...</div>
+    </div>
+
+    <!-- Enviar Proposta -->
+    <div id="tab-proposta" style="display:none" class="card">
+        <h2>Enviar Proposta</h2>
+        <div id="info-solicitacao" style="margin-bottom:16px;"></div>
+        <input type="number" id="valor" placeholder="Valor (R$)" step="0.01"/>
+        <input type="date" id="data_disponivel"/>
+        <textarea id="observacoes" rows="3" placeholder="Observações (opcional)"></textarea>
+        <div style="display:flex; gap:8px;">
+            <button onclick="enviarProposta()">Enviar Proposta</button>
+            <button onclick="mostrarTab('oportunidades')" style="background:#888;">Voltar</button>
+        </div>
+    </div>
+
+    <!-- Minhas Propostas -->
+    <div id="tab-minhas" style="display:none" class="card">
+        <h2>Minhas Propostas</h2>
+        <div id="lista-minhas-propostas">Carregando...</div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+    if (!localStorage.getItem('token')) window.location.href = 'index.html';
+
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    document.getElementById('nome-usuario').textContent = 'Olá, ' + user.name;
+
+    let solicitacaoSelecionada = null;
+    let todasSolicitacoes = [];
+
+    function mostrarTab(tab) {
+        ['oportunidades', 'proposta', 'minhas'].forEach(t => {
+            const el = document.getElementById('tab-' + t);
+            if (el) el.style.display = t === tab ? 'block' : 'none';
+        });
+        document.querySelectorAll('.tab').forEach((t, i) => {
+            t.classList.toggle('active', i === ['oportunidades', 'minhas'].indexOf(tab));
+        });
+        if (tab === 'oportunidades') carregarOportunidades();
+        if (tab === 'minhas') carregarMinhasPropostas();
+    }
+
+    async function carregarOportunidades() {
+        const { ok, data } = await request('GET', '/solicitacoes');
+        const lista = document.getElementById('lista-oportunidades');
+
+        if (!ok || data.length === 0) {
+            lista.innerHTML = '<p>Nenhuma solicitação disponível no momento.</p>';
+            return;
+        }
+
+        todasSolicitacoes = data;
+
+        lista.innerHTML = data
+            .filter(s => ['solicitado', 'em_analise', 'proposto'].includes(s.status))
+            .map(s => `
+                <div class="item">
+                    ${badgeStatus(s.status)}
+                    <h3>${s.origem} → ${s.destino}</h3>
+                    <p>Data desejada: ${s.data_desejada}</p>
+                    <p>${s.descricao || ''}</p>
+                    <div style="margin-top:4px;">
+                        ${s.precisa_desmontagem ? '<span class="badge badge-proposto">Desmontagem</span> ' : ''}
+                        ${s.precisa_montagem ? '<span class="badge badge-proposto">Montagem</span> ' : ''}
+                        ${s.itens_frageis ? '<span class="badge badge-solicitado">Frágeis</span>' : ''}
+                    </div>
+                    <button style="margin-top:8px;" onclick="abrirProposta(${s.id})">Enviar Proposta</button>
+                </div>
+            `).join('') || '<p>Nenhuma solicitação disponível.</p>';
+    }
+
+    function abrirProposta(id) {
+        solicitacaoSelecionada = todasSolicitacoes.find(s => s.id === id);
+        document.getElementById('info-solicitacao').innerHTML = `
+            <div class="item">
+                <h3>${solicitacaoSelecionada.origem} → ${solicitacaoSelecionada.destino}</h3>
+                <p>Data desejada: ${solicitacaoSelecionada.data_desejada}</p>
+                <p>${solicitacaoSelecionada.descricao || ''}</p>
+            </div>
+        `;
+        mostrarTab('proposta');
+    }
+
+    async function enviarProposta() {
+        if (!solicitacaoSelecionada) return;
+
+        const { ok, data } = await request('POST', `/solicitacoes/${solicitacaoSelecionada.id}/propostas`, {
+            valor:           parseFloat(document.getElementById('valor').value),
+            data_disponivel: document.getElementById('data_disponivel').value,
+            observacoes:     document.getElementById('observacoes').value,
+        });
+
+        if (ok) {
+            showAlert('alert-prestador', 'Proposta enviada com sucesso!', 'success');
+            document.getElementById('valor').value = '';
+            document.getElementById('data_disponivel').value = '';
+            document.getElementById('observacoes').value = '';
+            mostrarTab('oportunidades');
+        } else {
+            const erros = data.errors ? Object.values(data.errors).flat().join('<br>') : data.message;
+            showAlert('alert-prestador', erros, 'error');
+        }
+    }
+
+    async function carregarMinhasPropostas() {
+        const { ok, data } = await request('GET', '/solicitacoes');
+        const lista = document.getElementById('lista-minhas-propostas');
+
+        if (!ok) {
+            lista.innerHTML = '<p>Erro ao carregar propostas.</p>';
+            return;
+        }
+
+        lista.innerHTML = '<p>Carregando propostas...</p>';
+
+        const propostas = [];
+        for (const s of data) {
+            const res = await request('GET', `/solicitacoes/${s.id}/propostas`);
+            if (res.ok) {
+                res.data
+                    .filter(p => p.prestador_id === user.id)
+                    .forEach(p => propostas.push({ ...p, solicitacao: s }));
+            }
+        }
+
+        if (propostas.length === 0) {
+            lista.innerHTML = '<p>Você ainda não enviou propostas.</p>';
+            return;
+        }
+
+        lista.innerHTML = propostas.map(p => `
+            <div class="item">
+                ${badgeStatus(p.status)}
+                <h3>${p.solicitacao.origem} → ${p.solicitacao.destino}</h3>
+                <p>Valor: R$ ${parseFloat(p.valor).toFixed(2)}</p>
+                <p>Disponível: ${p.data_disponivel}</p>
+                <p>${p.observacoes || ''}</p>
+            </div>
+        `).join('');
+    }
+
+    carregarOportunidades();
+</script>
+</body>
+</html>

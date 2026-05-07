@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMoove — Cliente</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+    <h1>🚛 IMoove</h1>
+    <div>
+        <span id="nome-usuario" style="margin-right:16px;"></span>
+        <button onclick="logout()">Sair</button>
+    </div>
+</header>
+
+<div class="container">
+    <div id="alert-cliente"></div>
+
+    <div class="tabs">
+        <button class="tab active" onclick="mostrarTab('nova')">Nova Solicitação</button>
+        <button class="tab" onclick="mostrarTab('minhas')">Minhas Solicitações</button>
+    </div>
+
+    <!-- Nova Solicitação -->
+    <div id="tab-nova" class="card">
+        <h2>Nova Solicitação de Mudança</h2>
+        <input type="text" id="origem" placeholder="Endereço de origem"/>
+        <input type="text" id="destino" placeholder="Endereço de destino"/>
+        <input type="date" id="data_desejada"/>
+        <textarea id="descricao" rows="3" placeholder="Descrição (opcional)"></textarea>
+        <div style="margin-bottom:12px;">
+            <label><input type="checkbox" id="desmontagem"> Precisa desmontagem</label><br>
+            <label><input type="checkbox" id="montagem"> Precisa montagem</label><br>
+            <label><input type="checkbox" id="frageis"> Itens frágeis</label>
+        </div>
+        <button onclick="criarSolicitacao()">Solicitar Mudança</button>
+    </div>
+
+    <!-- Minhas Solicitações -->
+    <div id="tab-minhas" style="display:none">
+        <div class="card">
+            <h2>Minhas Solicitações</h2>
+            <div id="lista-solicitacoes">Carregando...</div>
+        </div>
+    </div>
+
+    <!-- Propostas -->
+    <div id="tab-propostas" style="display:none">
+        <div class="card">
+            <h2>Propostas Recebidas</h2>
+            <div id="lista-propostas">Carregando...</div>
+        </div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+    if (!localStorage.getItem('token')) window.location.href = 'index.html';
+
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    document.getElementById('nome-usuario').textContent = 'Olá, ' + user.name;
+
+    function mostrarTab(tab) {
+        ['nova', 'minhas', 'propostas'].forEach(t => {
+            document.getElementById('tab-' + t).style.display = t === tab ? 'block' : 'none';
+        });
+        document.querySelectorAll('.tab').forEach((t, i) => {
+            t.classList.toggle('active', i === ['nova', 'minhas'].indexOf(tab));
+        });
+        if (tab === 'minhas') carregarSolicitacoes();
+    }
+
+    async function criarSolicitacao() {
+        const { ok, data } = await request('POST', '/solicitacoes', {
+            origem:               document.getElementById('origem').value,
+            destino:              document.getElementById('destino').value,
+            data_desejada:        document.getElementById('data_desejada').value,
+            descricao:            document.getElementById('descricao').value,
+            precisa_desmontagem:  document.getElementById('desmontagem').checked,
+            precisa_montagem:     document.getElementById('montagem').checked,
+            itens_frageis:        document.getElementById('frageis').checked,
+        });
+
+        if (ok) {
+            showAlert('alert-cliente', 'Solicitação criada com sucesso!', 'success');
+            document.getElementById('origem').value = '';
+            document.getElementById('destino').value = '';
+            document.getElementById('data_desejada').value = '';
+            document.getElementById('descricao').value = '';
+        } else {
+            const erros = data.errors ? Object.values(data.errors).flat().join('<br>') : data.message;
+            showAlert('alert-cliente', erros, 'error');
+        }
+    }
+
+    async function carregarSolicitacoes() {
+        const { ok, data } = await request('GET', '/solicitacoes');
+        const lista = document.getElementById('lista-solicitacoes');
+
+        if (!ok || data.length === 0) {
+            lista.innerHTML = '<p>Nenhuma solicitação encontrada.</p>';
+            return;
+        }
+
+        lista.innerHTML = data.map(s => `
+            <div class="item">
+                ${badgeStatus(s.status)}
+                <h3>${s.origem} → ${s.destino}</h3>
+                <p>Data desejada: ${s.data_desejada}</p>
+                <p>${s.descricao || ''}</p>
+                <div style="margin-top:8px; display:flex; gap:8px;">
+                    <button onclick="verPropostas(${s.id})">Ver Propostas</button>
+                    ${s.status === 'solicitado' ? `<button class="btn-danger" onclick="cancelar(${s.id})">Cancelar</button>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function verPropostas(solicitacaoId) {
+        mostrarTab('propostas');
+        const { ok, data } = await request('GET', `/solicitacoes/${solicitacaoId}/propostas`);
+        const lista = document.getElementById('lista-propostas');
+
+        if (!ok || data.length === 0) {
+            lista.innerHTML = '<p>Nenhuma proposta recebida ainda.</p>';
+            return;
+        }
+
+        lista.innerHTML = data.map(p => `
+            <div class="item">
+                ${badgeStatus(p.status)}
+                <h3>R$ ${parseFloat(p.valor).toFixed(2)}</h3>
+                <p>Prestador: ${p.prestador?.name || 'N/A'}</p>
+                <p>Disponível em: ${p.data_disponivel}</p>
+                <p>${p.observacoes || ''}</p>
+                ${p.status === 'pendente' ? `<button class="btn-success" onclick="aceitarProposta(${p.id})">Aceitar</button>` : ''}
+            </div>
+        `).join('');
+    }
+
+    async function aceitarProposta(id) {
+        const { ok, data } = await request('POST', `/propostas/${id}/aceitar`);
+        if (ok) {
+            showAlert('alert-cliente', 'Proposta aceita! Ordem de serviço gerada.', 'success');
+            mostrarTab('minhas');
+        } else {
+            showAlert('alert-cliente', data.message, 'error');
+        }
+    }
+
+    async function cancelar(id) {
+        const { ok, data } = await request('PATCH', `/solicitacoes/${id}/cancelar`);
+        if (ok) {
+            showAlert('alert-cliente', 'Solicitação cancelada.', 'success');
+            carregarSolicitacoes();
+        } else {
+            showAlert('alert-cliente', data.message, 'error');
+        }
+    }
+</script>
+</body>
+</html>

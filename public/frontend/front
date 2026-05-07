@@ -1,0 +1,7 @@
+public/
+ └── frontend/
+      ├── index.html      (login/cadastro)
+      ├── cliente.html    (dashboard do cliente)
+      ├── prestador.html  (dashboard do prestador)
+      ├── style.css       (estilos)
+      └── app.js          (funções compartilhadas)

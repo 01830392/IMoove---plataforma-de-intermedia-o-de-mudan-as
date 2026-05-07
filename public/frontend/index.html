@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMoove — Plataforma de Mudanças</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="auth-container">
+    <div class="card">
+        <h2>🚛 IMoove</h2>
+        <p style="color:#666; margin-bottom:24px;">Plataforma de intermediação de mudanças</p>
+
+        <div class="tabs">
+            <button class="tab active" onclick="mostrarTab('login')">Entrar</button>
+            <button class="tab" onclick="mostrarTab('cadastro')">Cadastrar</button>
+        </div>
+
+        <div id="alert-auth"></div>
+
+        <!-- Login -->
+        <div id="tab-login">
+            <input type="email" id="login-email" placeholder="E-mail"/>
+            <input type="password" id="login-senha" placeholder="Senha"/>
+            <button onclick="fazerLogin()">Entrar</button>
+        </div>
+
+        <!-- Cadastro -->
+        <div id="tab-cadastro" style="display:none">
+            <input type="text" id="cad-nome" placeholder="Nome completo"/>
+            <input type="email" id="cad-email" placeholder="E-mail"/>
+            <div class="form-row">
+                <input type="password" id="cad-senha" placeholder="Senha"/>
+                <input type="password" id="cad-confirma" placeholder="Confirmar senha"/>
+            </div>
+            <select id="cad-perfil">
+                <option value="cliente">Cliente</option>
+                <option value="prestador">Prestador</option>
+            </select>
+            <button onclick="fazerCadastro()">Cadastrar</button>
+        </div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+    // Redireciona se já estiver logado
+    if (localStorage.getItem('token')) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        window.location.href = user.perfil === 'prestador' ? 'prestador.html' : 'cliente.html';
+    }
+
+    function mostrarTab(tab) {
+        document.getElementById('tab-login').style.display = tab === 'login' ? 'block' : 'none';
+        document.getElementById('tab-cadastro').style.display = tab === 'cadastro' ? 'block' : 'none';
+        document.querySelectorAll('.tab').forEach((t, i) => {
+            t.classList.toggle('active', (tab === 'login' && i === 0) || (tab === 'cadastro' && i === 1));
+        });
+    }
+
+    async function fazerLogin() {
+        const email = document.getElementById('login-email').value;
+        const senha = document.getElementById('login-senha').value;
+
+        const { ok, data } = await request('POST', '/login', { email, password: senha });
+
+        if (ok) {
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+            window.location.href = data.user.perfil === 'prestador' ? 'prestador.html' : 'cliente.html';
+        } else {
+            showAlert('alert-auth', data.message || 'Erro ao fazer login.', 'error');
+        }
+    }
+
+    async function fazerCadastro() {
+        const { ok, data } = await request('POST', '/register', {
+            name:                  document.getElementById('cad-nome').value,
+            email:                 document.getElementById('cad-email').value,
+            password:              document.getElementById('cad-senha').value,
+            password_confirmation: document.getElementById('cad-confirma').value,
+            perfil:                document.getElementById('cad-perfil').value,
+        });
+
+        if (ok) {
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+            window.location.href = data.user.perfil === 'prestador' ? 'prestador.html' : 'cliente.html';
+        } else {
+            const erros = data.errors ? Object.values(data.errors).flat().join('<br>') : data.message;
+            showAlert('alert-auth', erros, 'error');
+        }
+    }
+</script>
+</body>
+</html>
