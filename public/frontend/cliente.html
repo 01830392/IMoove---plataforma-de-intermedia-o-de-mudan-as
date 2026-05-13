@@ -2,164 +2,295 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IMoove — Cliente</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mudoo — Cliente</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="app-body">
 
-<header>
-    <h1>🚛 IMoove</h1>
-    <div>
-        <span id="nome-usuario" style="margin-right:16px;"></span>
-        <button onclick="logout()">Sair</button>
-    </div>
-</header>
+    <div class="mobile-container">
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="header-top">
+                <div class="logo-area">
+                    <h1>🚛 Mudoo</h1>
+                    <p>Mudanças inteligentes</p>
+                </div>
+                <div class="user-avatar" onclick="logout()" title="Sair"></div>
+            </div>
+        </header>
 
-<div class="container">
-    <div id="alert-cliente"></div>
-
-    <div class="tabs">
-        <button class="tab active" onclick="mostrarTab('nova')">Nova Solicitação</button>
-        <button class="tab" onclick="mostrarTab('minhas')">Minhas Solicitações</button>
-    </div>
-
-    <!-- Nova Solicitação -->
-    <div id="tab-nova" class="card">
-        <h2>Nova Solicitação de Mudança</h2>
-        <input type="text" id="origem" placeholder="Endereço de origem"/>
-        <input type="text" id="destino" placeholder="Endereço de destino"/>
-        <input type="date" id="data_desejada"/>
-        <textarea id="descricao" rows="3" placeholder="Descrição (opcional)"></textarea>
-        <div style="margin-bottom:12px;">
-            <label><input type="checkbox" id="desmontagem"> Precisa desmontagem</label><br>
-            <label><input type="checkbox" id="montagem"> Precisa montagem</label><br>
-            <label><input type="checkbox" id="frageis"> Itens frágeis</label>
+        <!-- LOCATION CARD -->
+        <div class="location-card">
+            <div class="loc-info">
+                <span>Sua Localização</span>
+                <strong id="user-location">Rua das Flores, 142 — Centro</strong>
+            </div>
+            <button class="btn-alterar">Alterar</button>
         </div>
-        <button onclick="criarSolicitacao()">Solicitar Mudança</button>
-    </div>
 
-    <!-- Minhas Solicitações -->
-    <div id="tab-minhas" style="display:none">
-        <div class="card">
-            <h2>Minhas Solicitações</h2>
-            <div id="lista-solicitacoes">Carregando...</div>
-        </div>
-    </div>
+        <!-- MAIN DASHBOARD (TAB INICIO) -->
+        <div id="tab-inicio" class="content-area">
+            
+            <div class="section-header">
+                <h2>O que você precisa hoje?</h2>
+                <p>Escolha o tipo de serviço</p>
+            </div>
 
-    <!-- Propostas -->
-    <div id="tab-propostas" style="display:none">
-        <div class="card">
-            <h2>Propostas Recebidas</h2>
-            <div id="lista-propostas">Carregando...</div>
-        </div>
-    </div>
-</div>
-
-<script src="app.js"></script>
-<script>
-    if (!localStorage.getItem('token')) window.location.href = 'index.html';
-
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    document.getElementById('nome-usuario').textContent = 'Olá, ' + user.name;
-
-    function mostrarTab(tab) {
-        ['nova', 'minhas', 'propostas'].forEach(t => {
-            document.getElementById('tab-' + t).style.display = t === tab ? 'block' : 'none';
-        });
-        document.querySelectorAll('.tab').forEach((t, i) => {
-            t.classList.toggle('active', i === ['nova', 'minhas'].indexOf(tab));
-        });
-        if (tab === 'minhas') carregarSolicitacoes();
-    }
-
-    async function criarSolicitacao() {
-        const { ok, data } = await request('POST', '/solicitacoes', {
-            origem:               document.getElementById('origem').value,
-            destino:              document.getElementById('destino').value,
-            data_desejada:        document.getElementById('data_desejada').value,
-            descricao:            document.getElementById('descricao').value,
-            precisa_desmontagem:  document.getElementById('desmontagem').checked,
-            precisa_montagem:     document.getElementById('montagem').checked,
-            itens_frageis:        document.getElementById('frageis').checked,
-        });
-
-        if (ok) {
-            showAlert('alert-cliente', 'Solicitação criada com sucesso!', 'success');
-            document.getElementById('origem').value = '';
-            document.getElementById('destino').value = '';
-            document.getElementById('data_desejada').value = '';
-            document.getElementById('descricao').value = '';
-        } else {
-            const erros = data.errors ? Object.values(data.errors).flat().join('<br>') : data.message;
-            showAlert('alert-cliente', erros, 'error');
-        }
-    }
-
-    async function carregarSolicitacoes() {
-        const { ok, data } = await request('GET', '/solicitacoes');
-        const lista = document.getElementById('lista-solicitacoes');
-
-        if (!ok || data.length === 0) {
-            lista.innerHTML = '<p>Nenhuma solicitação encontrada.</p>';
-            return;
-        }
-
-        lista.innerHTML = data.map(s => `
-            <div class="item">
-                ${badgeStatus(s.status)}
-                <h3>${s.origem} → ${s.destino}</h3>
-                <p>Data desejada: ${s.data_desejada}</p>
-                <p>${s.descricao || ''}</p>
-                <div style="margin-top:8px; display:flex; gap:8px;">
-                    <button onclick="verPropostas(${s.id})">Ver Propostas</button>
-                    ${s.status === 'solicitado' ? `<button class="btn-danger" onclick="cancelar(${s.id})">Cancelar</button>` : ''}
+            <div class="services-grid">
+                <div class="service-card active" onclick="abrirNovaSolicitacao('Mudança Residencial')">
+                    <div class="service-icon">🏠</div>
+                    <h3>Mudança Residencial</h3>
+                    <p>Apartamento ou casa completa</p>
+                </div>
+                <div class="service-card" onclick="abrirNovaSolicitacao('Mudança Comercial')">
+                    <div class="service-icon">🏢</div>
+                    <h3>Mudança Comercial</h3>
+                    <p>Escritórios e empresas</p>
+                </div>
+                <div class="service-card" onclick="abrirNovaSolicitacao('Frete de Objetos')">
+                    <div class="service-icon">📦</div>
+                    <h3>Frete de Objetos</h3>
+                    <p>Itens avulsos e pequenos</p>
+                </div>
+                <div class="service-card" onclick="abrirNovaSolicitacao('Montagem')">
+                    <div class="service-icon">🛋️</div>
+                    <h3>Montagem</h3>
+                    <p>Móveis e equipamentos</p>
                 </div>
             </div>
-        `).join('');
-    }
 
-    async function verPropostas(solicitacaoId) {
-        mostrarTab('propostas');
-        const { ok, data } = await request('GET', `/solicitacoes/${solicitacaoId}/propostas`);
-        const lista = document.getElementById('lista-propostas');
-
-        if (!ok || data.length === 0) {
-            lista.innerHTML = '<p>Nenhuma proposta recebida ainda.</p>';
-            return;
-        }
-
-        lista.innerHTML = data.map(p => `
-            <div class="item">
-                ${badgeStatus(p.status)}
-                <h3>R$ ${parseFloat(p.valor).toFixed(2)}</h3>
-                <p>Prestador: ${p.prestador?.name || 'N/A'}</p>
-                <p>Disponível em: ${p.data_disponivel}</p>
-                <p>${p.observacoes || ''}</p>
-                ${p.status === 'pendente' ? `<button class="btn-success" onclick="aceitarProposta(${p.id})">Aceitar</button>` : ''}
+            <div class="promo-banner">
+                <div class="promo-text">
+                    <h3>Primeira mudança</h3>
+                    <p>Garanta 20% de desconto</p>
+                </div>
+                <button class="btn-cupom">CUPOM20</button>
             </div>
-        `).join('');
-    }
 
-    async function aceitarProposta(id) {
-        const { ok, data } = await request('POST', `/propostas/${id}/aceitar`);
-        if (ok) {
-            showAlert('alert-cliente', 'Proposta aceita! Ordem de serviço gerada.', 'success');
-            mostrarTab('minhas');
-        } else {
-            showAlert('alert-cliente', data.message, 'error');
-        }
-    }
+            <div class="historico-header">
+                <h2>Últimas corridas</h2>
+                <a href="#" onclick="mostrarTab('historico')">Ver tudo</a>
+            </div>
 
-    async function cancelar(id) {
-        const { ok, data } = await request('PATCH', `/solicitacoes/${id}/cancelar`);
-        if (ok) {
-            showAlert('alert-cliente', 'Solicitação cancelada.', 'success');
-            carregarSolicitacoes();
-        } else {
-            showAlert('alert-cliente', data.message, 'error');
+            <div class="historico-list" id="preview-historico">
+                <!-- Preview estático para matching exato da imagem -->
+                <div class="history-item">
+                    <div class="history-icon">🏠</div>
+                    <div class="history-info">
+                        <h4>Mudança Residencial</h4>
+                        <p>12 mai · Consolação → Pinheiros</p>
+                    </div>
+                    <div class="history-price">R$ 420</div>
+                </div>
+                <div class="history-item">
+                    <div class="history-icon">📦</div>
+                    <div class="history-info">
+                        <h4>Frete de Objetos</h4>
+                        <p>03 mai · Centro → Moema</p>
+                    </div>
+                    <div class="history-price">R$ 95</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FORM OVERLAY: NOVA SOLICITAÇÃO -->
+        <div id="tab-nova" class="form-overlay">
+            <button class="btn-close" onclick="fecharNovaSolicitacao()">← Voltar</button>
+            <h2 id="titulo-form-nova">Nova Solicitação</h2>
+            
+            <div id="alert-cliente" style="margin-bottom:16px;"></div>
+
+            <input type="text" id="origem" placeholder="Endereço de origem" />
+            <input type="text" id="destino" placeholder="Endereço de destino" />
+            <input type="date" id="data_desejada" />
+            <textarea id="descricao" rows="3" placeholder="Descrição (opcional)"></textarea>
+            
+            <div style="margin:16px 0; display:flex; flex-direction:column; gap:8px; font-size:14px;">
+                <label style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="desmontagem" style="width:16px; margin:0;"> Precisa desmontagem
+                </label>
+                <label style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="montagem" style="width:16px; margin:0;"> Precisa montagem
+                </label>
+                <label style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="frageis" style="width:16px; margin:0;"> Itens frágeis
+                </label>
+            </div>
+            
+            <button class="btn-primary" onclick="criarSolicitacao()">Solicitar Mudança</button>
+        </div>
+
+        <!-- HISTORICO COMPLETO / MINHAS SOLICITAÇÕES -->
+        <div id="tab-historico" class="form-overlay">
+            <button class="btn-close" onclick="mostrarTab('inicio')">← Voltar</button>
+            <h2>Minhas Solicitações</h2>
+            <div id="lista-solicitacoes" class="historico-list">Carregando...</div>
+        </div>
+
+        <!-- PROPOSTAS -->
+        <div id="tab-propostas" class="form-overlay">
+            <button class="btn-close" onclick="mostrarTab('historico')">← Voltar</button>
+            <h2>Propostas Recebidas</h2>
+            <div id="lista-propostas" class="historico-list">Carregando...</div>
+        </div>
+
+        <!-- BOTTOM NAV -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" onclick="mostrarTab('inicio')">
+                <span class="nav-icon">🏠</span>
+                Início
+            </button>
+            <button class="nav-item" onclick="abrirNovaSolicitacao('Serviço')">
+                <span class="nav-icon">➕</span>
+                Pedir
+            </button>
+            <button class="nav-item" onclick="mostrarTab('historico')">
+                <span class="nav-icon">📋</span>
+                Histórico
+            </button>
+            <button class="nav-item" onclick="logout()">
+                <span class="nav-icon">👤</span>
+                Perfil
+            </button>
+        </nav>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        if (!localStorage.getItem('token')) window.location.href = 'index.html';
+
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        // Pode atualizar o nome em algum lugar se quiser
+
+        function mostrarTab(tabId) {
+            // Esconde overlay se voltar pro inicio
+            document.querySelectorAll('.form-overlay').forEach(el => el.classList.remove('active'));
+            
+            // Controle de abas da nav
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            if (tabId === 'inicio') {
+                document.querySelectorAll('.nav-item')[0].classList.add('active');
+            } else if (tabId === 'historico') {
+                document.getElementById('tab-historico').classList.add('active');
+                document.querySelectorAll('.nav-item')[2].classList.add('active');
+                carregarSolicitacoes();
+            } else if (tabId === 'propostas') {
+                document.getElementById('tab-propostas').classList.add('active');
+            }
         }
-    }
-</script>
+
+        function abrirNovaSolicitacao(tipo) {
+            document.getElementById('titulo-form-nova').innerText = tipo;
+            document.getElementById('tab-nova').classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item')[1].classList.add('active'); // Pedir
+        }
+
+        function fecharNovaSolicitacao() {
+            document.getElementById('tab-nova').classList.remove('active');
+            mostrarTab('inicio');
+        }
+
+        async function criarSolicitacao() {
+            const { ok, data } = await request('POST', '/solicitacoes', {
+                origem: document.getElementById('origem').value,
+                destino: document.getElementById('destino').value,
+                data_desejada: document.getElementById('data_desejada').value,
+                descricao: document.getElementById('descricao').value,
+                precisa_desmontagem: document.getElementById('desmontagem').checked,
+                precisa_montagem: document.getElementById('montagem').checked,
+                itens_frageis: document.getElementById('frageis').checked,
+            });
+
+            if (ok) {
+                showAlert('alert-cliente', 'Solicitação criada com sucesso!', 'success');
+                setTimeout(() => {
+                    fecharNovaSolicitacao();
+                    mostrarTab('historico');
+                }, 1500);
+                // clear
+                document.getElementById('origem').value = '';
+                document.getElementById('destino').value = '';
+                document.getElementById('data_desejada').value = '';
+                document.getElementById('descricao').value = '';
+            } else {
+                const erros = data.errors ? Object.values(data.errors).flat().join('<br>') : data.message;
+                showAlert('alert-cliente', erros, 'error');
+            }
+        }
+
+        async function carregarSolicitacoes() {
+            const { ok, data } = await request('GET', '/solicitacoes');
+            const lista = document.getElementById('lista-solicitacoes');
+
+            if (!ok || data.length === 0) {
+                lista.innerHTML = '<p style="font-size:14px;color:#666;">Nenhuma solicitação encontrada.</p>';
+                return;
+            }
+
+            lista.innerHTML = data.map(s => `
+            <div class="history-item" style="flex-direction:column; align-items:flex-start; background:#f9f9f9; padding:16px; border-radius:12px;">
+                <div style="display:flex; justify-content:space-between; width:100%;">
+                    <span style="font-weight:bold; color:var(--primary);">${s.status.toUpperCase()}</span>
+                    <span style="font-size:12px; color:#888;">${s.data_desejada}</span>
+                </div>
+                <h4 style="margin:8px 0;">${s.origem} → ${s.destino}</h4>
+                <p style="font-size:13px; color:#666; margin-bottom:12px;">${s.descricao || 'Sem descrição'}</p>
+                <div style="display:flex; gap:8px; width:100%;">
+                    <button class="btn-primary" style="flex:1; padding:10px; font-size:13px; border-radius:8px;" onclick="verPropostas(${s.id})">Ver Propostas</button>
+                    ${s.status === 'solicitado' ? `<button style="background:#e53935; color:white; border:none; padding:10px; border-radius:8px; font-weight:bold;" onclick="cancelar(${s.id})">Cancelar</button>` : ''}
+                </div>
+            </div>
+            `).join('');
+        }
+
+        async function verPropostas(solicitacaoId) {
+            mostrarTab('propostas');
+            const { ok, data } = await request('GET', `/solicitacoes/${solicitacaoId}/propostas`);
+            const lista = document.getElementById('lista-propostas');
+
+            if (!ok || data.length === 0) {
+                lista.innerHTML = '<p style="font-size:14px;color:#666;">Nenhuma proposta recebida ainda.</p>';
+                return;
+            }
+
+            lista.innerHTML = data.map(p => `
+            <div class="history-item" style="flex-direction:column; align-items:flex-start; background:#f9f9f9; padding:16px; border-radius:12px;">
+                <div style="display:flex; justify-content:space-between; width:100%;">
+                    <span style="font-weight:bold; color:var(--primary);">${p.status.toUpperCase()}</span>
+                    <h3 style="color:#222;">R$ ${parseFloat(p.valor).toFixed(2)}</h3>
+                </div>
+                <p style="margin:8px 0; font-size:14px;"><strong>Prestador:</strong> ${p.prestador?.name || 'N/A'}</p>
+                <p style="font-size:13px; color:#666;">Disponível em: ${p.data_disponivel}</p>
+                ${p.observacoes ? `<p style="font-size:13px; color:#666; margin-top:4px;">Obs: ${p.observacoes}</p>` : ''}
+                
+                ${p.status === 'pendente' ? `<button class="btn-primary" style="width:100%; margin-top:12px; padding:10px; border-radius:8px; background:#43a047;" onclick="aceitarProposta(${p.id})">Aceitar Proposta</button>` : ''}
+            </div>
+            `).join('');
+        }
+
+        async function aceitarProposta(id) {
+            const { ok, data } = await request('POST', `/propostas/${id}/aceitar`);
+            if (ok) {
+                alert('Proposta aceita! Ordem de serviço gerada.');
+                mostrarTab('historico');
+            } else {
+                alert(data.message || 'Erro ao aceitar proposta');
+            }
+        }
+
+        async function cancelar(id) {
+            const { ok, data } = await request('PATCH', `/solicitacoes/${id}/cancelar`);
+            if (ok) {
+                alert('Solicitação cancelada.');
+                carregarSolicitacoes();
+            } else {
+                alert(data.message || 'Erro ao cancelar');
+            }
+        }
+    </script>
 </body>
 </html>
